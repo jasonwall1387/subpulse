@@ -13,9 +13,22 @@ import { useSubscriptions } from "@/lib/hooks";
 import { listCategories } from "@/lib/repo/categories";
 import { getSetting, setSetting } from "@/lib/repo/settings";
 import { listSubscriptions } from "@/lib/repo/subscriptions";
-import { listPlans } from "@/lib/repo/usage";
+import { listPlans, updatePlan } from "@/lib/repo/usage";
 import { setWidgetVisible } from "@/lib/tray";
 import { loadSeed } from "@/seed/seed";
+
+function parseAlertsEnabled(plan: {
+  connector: string;
+  connector_config: string;
+}): boolean {
+  try {
+    const cfg = JSON.parse(plan.connector_config) as { alertsEnabled?: boolean };
+    if (typeof cfg.alertsEnabled === "boolean") return cfg.alertsEnabled;
+  } catch {
+    // ignore
+  }
+  return plan.connector !== "manual";
+}
 
 export function SettingsView() {
   const queryClient = useQueryClient();
@@ -39,6 +52,22 @@ export function SettingsView() {
   const { data: widgetOpacity = 70 } = useQuery({
     queryKey: ["setting", "widget_opacity"],
     queryFn: () => getSetting<number>("widget_opacity", 70),
+  });
+  const { data: notifyT3 = true } = useQuery({
+    queryKey: ["setting", "notify_renewal_t3"],
+    queryFn: () => getSetting<boolean>("notify_renewal_t3", true),
+  });
+  const { data: notifyT1 = true } = useQuery({
+    queryKey: ["setting", "notify_renewal_t1"],
+    queryFn: () => getSetting<boolean>("notify_renewal_t1", true),
+  });
+  const { data: notifyT0 = true } = useQuery({
+    queryKey: ["setting", "notify_renewal_t0"],
+    queryFn: () => getSetting<boolean>("notify_renewal_t0", true),
+  });
+  const { data: usageThreshold = 85 } = useQuery({
+    queryKey: ["setting", "usage_alert_threshold"],
+    queryFn: () => getSetting<number>("usage_alert_threshold", 85),
   });
   const [message, setMessage] = useState<string | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
@@ -191,6 +220,108 @@ export function SettingsView() {
               }}
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-xl">
+        <h2 className="text-sm font-medium text-zinc-200">Notifications</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Renewal reminders and usage limit alerts.
+        </p>
+        <div className="mt-4 space-y-4">
+          {(
+            [
+              ["notify_renewal_t3", "Renewal in 3 days", notifyT3],
+              ["notify_renewal_t1", "Renewal tomorrow", notifyT1],
+              ["notify_renewal_t0", "Renewal today", notifyT0],
+            ] as const
+          ).map(([key, label, checked]) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-4"
+            >
+              <span className="text-sm text-zinc-300">{label}</span>
+              <Switch
+                checked={checked}
+                onCheckedChange={(value) => {
+                  void (async () => {
+                    await setSetting(key, value);
+                    await queryClient.invalidateQueries({
+                      queryKey: ["setting", key],
+                    });
+                  })();
+                }}
+              />
+            </label>
+          ))}
+          <label className="block space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-zinc-300">Usage alert threshold</span>
+              <span className="tabular-nums text-zinc-500">
+                {usageThreshold}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={50}
+              max={100}
+              step={5}
+              value={usageThreshold}
+              className="w-full accent-violet-500"
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                void (async () => {
+                  await setSetting("usage_alert_threshold", value);
+                  await queryClient.invalidateQueries({
+                    queryKey: ["setting", "usage_alert_threshold"],
+                  });
+                })();
+              }}
+            />
+          </label>
+          {plans.length > 0 && (
+            <div className="space-y-3 border-t border-white/[0.06] pt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Per-plan usage alerts
+              </p>
+              {plans.map((plan) => {
+                const on = parseAlertsEnabled(plan);
+                return (
+                  <label
+                    key={plan.id}
+                    className="flex items-center justify-between gap-4"
+                  >
+                    <span className="truncate text-sm text-zinc-300">
+                      {plan.display_name}
+                    </span>
+                    <Switch
+                      checked={on}
+                      onCheckedChange={(checked) => {
+                        void (async () => {
+                          let cfg: Record<string, unknown> = {};
+                          try {
+                            cfg = JSON.parse(plan.connector_config) as Record<
+                              string,
+                              unknown
+                            >;
+                          } catch {
+                            cfg = {};
+                          }
+                          await updatePlan(plan.id, {
+                            connector_config: {
+                              ...cfg,
+                              alertsEnabled: checked,
+                            },
+                          });
+                          await refetchPlans();
+                        })();
+                      }}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

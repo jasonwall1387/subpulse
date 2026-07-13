@@ -8,6 +8,8 @@ import {
   initTray,
   setupCloseToTray,
 } from "./lib/tray";
+import { startRenewalNotificationLoop } from "./lib/notify/renewals";
+import { startUsageAlertListener } from "./lib/notify/usageAlerts";
 import { getSetting } from "./lib/repo/settings";
 import { WidgetView } from "./views/WidgetView";
 import "./styles.css";
@@ -28,6 +30,8 @@ async function bootMain(): Promise<void> {
   await setupCloseToTray();
   await initTray();
   await applyWidgetVisibilityOnBoot();
+  startRenewalNotificationLoop();
+  startUsageAlertListener();
   const startHidden = await getSetting<boolean>("start_hidden", false);
   if (startHidden) {
     await current.hide();
