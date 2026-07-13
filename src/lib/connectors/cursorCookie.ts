@@ -19,17 +19,18 @@ const planUsageSchema = z
   .object({
     enabled: z.boolean().optional(),
     used: z.number().optional(),
-    limit: z.number().optional(),
-    remaining: z.number().optional(),
+    limit: z.number().nullish(),
+    remaining: z.number().nullish(),
     totalPercentUsed: z.number().optional(),
   })
   .passthrough();
 
 const onDemandSchema = z
   .object({
-    used: z.number().optional(),
-    limit: z.number().optional(),
-    remaining: z.number().optional(),
+    enabled: z.boolean().optional(),
+    used: z.number().nullish(),
+    limit: z.number().nullish(),
+    remaining: z.number().nullish(),
   })
   .passthrough();
 
@@ -95,14 +96,14 @@ export function parseCursorSummary(raw: unknown): {
   const data = parsed.data;
   const buckets: NormalizedBucket[] = [];
   const plan = data.individualUsage?.plan;
-  if (plan && (plan.used !== undefined || plan.limit !== undefined || plan.totalPercentUsed !== undefined)) {
+  if (plan && (plan.used !== undefined || plan.limit != null || plan.totalPercentUsed !== undefined)) {
     const usedCents = plan.used;
     const limitCents = plan.limit;
     let percent = plan.totalPercentUsed;
     if (
       percent === undefined &&
       usedCents !== undefined &&
-      limitCents !== undefined &&
+      limitCents != null &&
       limitCents !== 0
     ) {
       percent = (usedCents / limitCents) * 100;
@@ -117,8 +118,7 @@ export function parseCursorSummary(raw: unknown): {
         percent,
         used:
           usedCents !== undefined ? centsToDollars(usedCents) : undefined,
-        limit:
-          limitCents !== undefined ? centsToDollars(limitCents) : undefined,
+        limit: limitCents != null ? centsToDollars(limitCents) : undefined,
         unit: "usd",
         resetsAt: data.billingCycleEnd,
         source: "unofficial",
@@ -129,9 +129,9 @@ export function parseCursorSummary(raw: unknown): {
   const onDemand = data.individualUsage?.onDemand;
   if (
     onDemand &&
-    onDemand.limit !== undefined &&
+    onDemand.limit != null &&
     onDemand.limit > 0 &&
-    onDemand.used !== undefined
+    onDemand.used != null
   ) {
     const percent = (onDemand.used / onDemand.limit) * 100;
     buckets.push({
@@ -183,6 +183,7 @@ async function resolveCookie(ctx: ConnectorContext): Promise<string> {
       "auth",
     );
   }
+  assertCookieLooksComplete(token);
   return token;
 }
 
@@ -194,6 +195,39 @@ function mapAuthHttp(status: number): never {
     );
   }
   throw new ConnectorError(`Cursor HTTP ${status}`, "other");
+}
+
+const COOKIE_INCOMPLETE =
+  "Cursor cookie looks incomplete - re-copy the full value from cursor.com/dashboard";
+
+/** Reject truncated pastes before they produce opaque JSON parse errors. */
+export function assertCookieLooksComplete(token: string): void {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    throw new ConnectorError(COOKIE_INCOMPLETE, "auth");
+  }
+  const jwt = trimmed.includes("%3A%3A")
+    ? decodeURIComponent(trimmed.split("%3A%3A")[1] ?? "")
+    : trimmed.includes("::")
+      ? (trimmed.split("::")[1] ?? "")
+      : trimmed;
+  const parts = jwt.split(".");
+  if (parts.length < 3 || parts.some((p) => p.length === 0)) {
+    throw new ConnectorError(COOKIE_INCOMPLETE, "auth");
+  }
+}
+
+function humanizeCursorErr(err: unknown): ConnectorError {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    /unexpected end of (json )?input/i.test(msg) ||
+    /unexpected end of data/i.test(msg) ||
+    msg === "Unexpected end of JSON input"
+  ) {
+    return new ConnectorError(COOKIE_INCOMPLETE, "auth");
+  }
+  if (err instanceof ConnectorError) return err;
+  return new ConnectorError(msg || "Cursor network error", "network");
 }
 
 export const cursorCookieConnector: Connector = {
@@ -216,13 +250,15 @@ export const cursorCookieConnector: Connector = {
         headers: cursorHeaders(token),
       });
     } catch (err) {
-      throw new ConnectorError(
-        err instanceof Error ? err.message : "Cursor network error",
-        "network",
-      );
+      throw humanizeCursorErr(err);
     }
     if (!res.ok) mapAuthHttp(res.status);
-    const body = (await res.json()) as { email?: string; id?: string };
+    let body: { email?: string; id?: string };
+    try {
+      body = (await res.json()) as { email?: string; id?: string };
+    } catch (err) {
+      throw humanizeCursorErr(err);
+    }
     const who = body.email ?? body.id ?? "user";
     let message = `Authenticated as ${who}`;
     const exp = cookieExpiryEpoch(token);
@@ -243,30 +279,25 @@ export const cursorCookieConnector: Connector = {
         headers: cursorHeaders(token),
       });
     } catch (err) {
-      throw new ConnectorError(
-        err instanceof Error ? err.message : "Cursor network error",
-        "network",
-      );
+      throw humanizeCursorErr(err);
     }
     if (!res.ok) mapAuthHttp(res.status);
     let json: unknown;
     try {
       json = await res.json();
-    } catch {
-      throw new ConnectorError(
-        "Cursor usage-summary JSON shape mismatch",
-        "parse",
-      );
+    } catch (err) {
+      throw humanizeCursorErr(err);
     }
     let parsed = parseCursorSummary(json);
 
     // Optional hard-limit fallback when onDemand.limit missing
-    const onDemand = (json as { individualUsage?: { onDemand?: { limit?: number; used?: number } } })
-      ?.individualUsage?.onDemand;
+    const onDemand = (json as {
+      individualUsage?: { onDemand?: { limit?: number | null; used?: number | null } };
+    })?.individualUsage?.onDemand;
     if (
       onDemand &&
-      (onDemand.limit === undefined || onDemand.limit <= 0) &&
-      onDemand.used !== undefined
+      (onDemand.limit == null || onDemand.limit <= 0) &&
+      onDemand.used != null
     ) {
       try {
         const hlRes = await ctx.fetch(

@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
 import {
+  assertCookieLooksComplete,
   cookieExpiryEpoch,
   parseCursorSummary,
 } from "../lib/connectors/cursorCookie";
+import { ConnectorError } from "../lib/connectors/types";
 
 function fakeJwtWithExp(exp: number): string {
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString(
@@ -11,6 +13,16 @@ function fakeJwtWithExp(exp: number): string {
   const payload = Buffer.from(JSON.stringify({ exp })).toString("base64url");
   return `${header}.${payload}.sig`;
 }
+
+test("assertCookieLooksComplete rejects truncated pastes", () => {
+  expect(() => assertCookieLooksComplete("")).toThrow(ConnectorError);
+  expect(() => assertCookieLooksComplete("123%3A%3AeyJ")).toThrow(
+    /looks incomplete/,
+  );
+  expect(() =>
+    assertCookieLooksComplete("123%3A%3A" + fakeJwtWithExp(1790000000)),
+  ).not.toThrow();
+});
 
 test("parseCursorSummary and cookieExpiryEpoch", () => {
   const summaryFixture = {
@@ -55,6 +67,24 @@ test("parseCursorSummary and cookieExpiryEpoch", () => {
   });
   expect(r2.buckets).toHaveLength(1);
   expect(r2.buckets[0].percent).toBe(25);
+
+  // live shape: onDemand.limit null must not fail parse
+  const r3 = parseCursorSummary({
+    membershipType: "pro",
+    individualUsage: {
+      plan: {
+        enabled: true,
+        used: 2000,
+        limit: 2000,
+        remaining: 0,
+        totalPercentUsed: 18.3,
+      },
+      onDemand: { enabled: false, used: 0, limit: null, remaining: null },
+    },
+  });
+  expect(r3.buckets).toHaveLength(1);
+  expect(r3.buckets[0]).toMatchObject({ key: "plan_pool", percent: 18.3 });
+  expect(r3.tierLabel).toBe("Pro");
 
   // cookie expiry decode
   expect(
