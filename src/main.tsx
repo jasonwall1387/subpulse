@@ -11,6 +11,7 @@ import {
 } from "./lib/tray";
 import { startRenewalNotificationLoop } from "./lib/notify/renewals";
 import { startUsageAlertListener } from "./lib/notify/usageAlerts";
+import { setupLogging } from "./lib/logging";
 import { getSetting } from "./lib/repo/settings";
 import { WidgetView } from "./views/WidgetView";
 import "./styles.css";
@@ -28,6 +29,7 @@ const current = getCurrentWindow();
 const isWidget = current.label === "widget";
 
 async function bootMain(): Promise<void> {
+  await setupLogging();
   // Notifications must not depend on tray succeeding.
   startRenewalNotificationLoop();
   startUsageAlertListener();
@@ -46,7 +48,13 @@ async function bootMain(): Promise<void> {
   }
 }
 
-if (!isWidget) {
+async function bootWidget(): Promise<void> {
+  await setupLogging();
+}
+
+if (isWidget) {
+  void bootWidget();
+} else {
   void bootMain();
 }
 
