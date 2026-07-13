@@ -1,7 +1,6 @@
 import {
   attachConsole,
   error as logError,
-  warn as logWarn,
 } from "@tauri-apps/plugin-log";
 
 let started = false;
@@ -14,6 +13,7 @@ export async function setupLogging(): Promise<void> {
   try {
     await attachConsole();
   } catch (err) {
+    // Use native console only - do not wrap console.error (Webview log target loops).
     console.error("attachConsole failed", err);
   }
 
@@ -32,28 +32,4 @@ export async function setupLogging(): Promise<void> {
         : String(reason);
     void logError(`[unhandledrejection] ${msg}`);
   });
-
-  const originalError = console.error.bind(console);
-  console.error = (...args: unknown[]) => {
-    originalError(...args);
-    const msg = args
-      .map((a) => {
-        if (a instanceof Error) return `${a.message}\n${a.stack ?? ""}`;
-        if (typeof a === "string") return a;
-        try {
-          return JSON.stringify(a);
-        } catch {
-          return String(a);
-        }
-      })
-      .join(" ");
-    void logError(`[console.error] ${msg}`);
-  };
-
-  const originalWarn = console.warn.bind(console);
-  console.warn = (...args: unknown[]) => {
-    originalWarn(...args);
-    const msg = args.map((a) => String(a)).join(" ");
-    void logWarn(`[console.warn] ${msg}`);
-  };
 }

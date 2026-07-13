@@ -3,6 +3,7 @@
   "windows": ["main", "widget"],
   "permissions": [
     "core:default",
+    "core:app:allow-default-window-icon",
     "core:window:allow-hide",
     "core:window:allow-show",
     "core:window:allow-set-focus",
@@ -12,6 +13,8 @@
     "core:tray:default",
     "core:menu:default",
     "core:image:default",
+    "core:image:allow-from-path",
+    "core:image:allow-from-bytes",
     "sql:default",
     "sql:allow-execute",
     "sql:allow-select",
