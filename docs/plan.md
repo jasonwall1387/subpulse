@@ -982,15 +982,16 @@ Normative behavior:
    - `Authorization: Bearer <accessToken>`
    - `anthropic-beta: oauth-2025-04-20`
    - `User-Agent: claude-code/2.1.90` (constant `CLAUDE_CODE_UA`; the `claude-code/` prefix is required - requests without it hit an aggressive rate-limit bucket; overridable via `connector_config.userAgent`)
+   - `Origin: ""` (empty string). **Required transport note (verified 2026-07-13):** `tauri-plugin-http` must be compiled with cargo feature `unsafe-headers`. Without it the plugin strips Cookie/Origin/Referer/Sec-* and force-appends the webview Origin; Anthropic classifies Origin-bearing requests as browser CORS and returns 401. Empty `Origin` makes the plugin remove the header entirely (only works with `unsafe-headers`).
 3. Parse response tolerantly, handling BOTH known shapes:
    - Top-level bucket keys: `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet`, `seven_day_fable`, and any other `seven_day_*` - each `{ utilization: number 0-100, resets_at: string | null } | null`. Skip nulls. Ignore non-bucket keys.
-   - Newer `limits[]` array: `{ kind, group?, percent, resets_at, scope?: { model?: { display_name } } }` - map each entry to a bucket (key = `kind` or `kind_<display_name slug>`, label uses `display_name` when present).
-   - `extra_usage` object `{ is_enabled, monthly_limit, used_credits, utilization }`: when `is_enabled`, emit bucket `extra_usage` / label `Extra usage` / windowKind `monthly` / unit `usd`.
-4. Bucket mapping: `five_hour` -> windowKind `rolling_5h`; everything `seven_day*` -> `weekly`; labels via `humanizeBucketKey`; `source: 'unofficial'`.
+   - Newer `limits[]` array (preferred when present): live kinds observed 2026-07-13 map to stable keys shared with the top-level shape - `session` -> `five_hour` / "5-hour limit"; `weekly_all` (or `seven_day` without model) -> `seven_day` / "Weekly - all models"; `weekly_scoped` / `seven_day` with `scope.model.display_name` -> `seven_day_<slug>` / "Weekly - <display_name>". Older fixtures may still use `kind: five_hour|seven_day`. Validate each limits entry individually so one odd entry never kills the fetch. When both top-level buckets and `limits[]` are present, prefer `limits[]`.
+   - `extra_usage` object `{ is_enabled, monthly_limit, used_credits, utilization }` (nullish on some accounts): when `is_enabled`, emit bucket `extra_usage` / label `Extra usage` / windowKind `monthly` / unit `usd`.
+4. Bucket mapping: `five_hour` -> windowKind `rolling_5h`; everything `seven_day*` -> `weekly`; labels via `humanizeBucketKey` (or the explicit labels above for limits kinds); `source: 'unofficial'`.
 5. `tierLabel`: from credentials `rateLimitTier` (`default_claude_max_20x` -> `Max (20x)`, `..._5x` -> `Max (5x)`) else `subscriptionType` capitalized.
 6. Errors: file missing -> `auth` ("Claude Code not found on this machine - install/log in, or switch this plan to Manual"); HTTP 401 -> `auth` ("Claude token expired - open Claude Code once, it refreshes credentials automatically, then Retry"); HTTP 403 -> `auth` ("Token lacks user:profile scope - log into Claude Code interactively, not via setup-token"); HTTP 429 -> `other` ("Rate limited - backing off"); JSON shape mismatch -> `parse`.
 7. `probe`: file exists + `expiresAt` (epoch ms) in the future -> ok "Found Claude Code credentials (token valid)"; expired token still ok-with-warning since Claude Code refreshes it on next use. NEVER write the file, never log token contents. Default `refresh_minutes` 15 (research: >= 3-5 min is safe; 10 is our floor anyway).
-
+8. Cargo: `tauri-plugin-http = { version = "2.5.9", features = ["unsafe-headers"] }` in `src-tauri/Cargo.toml` (see section 16).
 - [ ] **Step 1:** Failing parser tests with BOTH fixtures (shapes per community-documented endpoint spec):
 
 ```ts
@@ -1039,19 +1040,18 @@ Setup help text (shown in dialog): "Log into cursor.com/dashboard in your browse
 
 Normative behavior:
 
-1. Headers on EVERY call (Cursor 403s non-browser-looking requests):
+1. Headers on EVERY call (Cursor 403s non-browser-looking requests). **Requires** `tauri-plugin-http` cargo feature `unsafe-headers` (section 16) so Cookie/Origin/Referer/Sec-* actually reach the wire:
    - `Cookie: WorkosCursorSessionToken=<token>`
    - `Origin: https://cursor.com`, `Referer: https://cursor.com/dashboard`
    - `Sec-Fetch-Site: same-origin`, `Sec-Fetch-Mode: cors`
    - a current Chrome desktop `User-Agent` string (constant `CURSOR_BROWSER_UA`)
-2. `probe`: `GET https://cursor.com/api/auth/me` -> 200 with an email/id = ok ("Authenticated as <email>"). Also decode the JWT half of the token (split on `%3A%3A`, base64url-decode the middle JWT segment) and read `exp`; append "cookie expires in N days" warning when under 7 days.
-3. `fetchUsage`: `GET https://cursor.com/api/usage-summary`. Response schema (community-documented; money fields are CENTS): `billingCycleStart`, `billingCycleEnd`, `membershipType`, `isUnlimited`, `individualUsage.plan.{enabled, used, limit, remaining, totalPercentUsed, ...}`, `individualUsage.onDemand.{used, limit, remaining}`. Parse with `.passthrough()` zod everywhere.
+2. `probe`: `GET https://cursor.com/api/auth/me` -> 200 with an email/id = ok ("Authenticated as <email>"). Also decode the JWT half of the token (split on `%3A%3A`, base64url-decode the middle JWT segment) and read `exp`; append "cookie expires in N days" warning when under 7 days. Reject truncated pastes before the network call (`assertCookieLooksComplete`) with a human auth error ("Cursor cookie looks incomplete - re-copy the full value from cursor.com/dashboard") instead of raw JSON "Unexpected end of input".
+3. `fetchUsage`: `GET https://cursor.com/api/usage-summary`. Response schema (community-documented; money fields are CENTS): `billingCycleStart`, `billingCycleEnd`, `membershipType`, `isUnlimited`, `individualUsage.plan.{enabled, used, limit, remaining, totalPercentUsed, ...}`, `individualUsage.onDemand.{used, limit, remaining}` - **`limit`/`remaining`/`used` are nullish** (live Pro accounts often have `onDemand.limit: null` when on-demand is disabled; zod must use `.nullish()`, not `.optional()`). Parse with `.passthrough()` zod everywhere.
 4. Buckets (source `unofficial`):
    - `plan_pool`, label `Included usage`, windowKind `plan_period`, unit `usd`, used/limit converted cents to dollars, percent = `totalPercentUsed` when present else derived, `resetsAt = billingCycleEnd`.
    - `on_demand`, label `On-demand spend`, only when `onDemand.limit` is present and > 0; same conversion; optional fallback for the limit via `POST https://cursor.com/api/dashboard/get-hard-limit` with body `{}` -> `{ hardLimit }` (dollars).
    - `tierLabel` from `membershipType`: `pro` -> `Pro`, `pro_plus` -> `Pro+`, `ultra` -> `Ultra`, else capitalize.
-5. Errors: HTTP 401/403 -> `auth` ("Cursor cookie expired or rejected - re-copy WorkosCursorSessionToken from cursor.com/dashboard"); shape mismatch -> `parse`; else `network`/`other`. Default `refresh_minutes` 15.
-
+5. Errors: HTTP 401/403 -> `auth` ("Cursor cookie expired or rejected - re-copy WorkosCursorSessionToken from cursor.com/dashboard"); incomplete cookie / opaque JSON EOF -> `auth` (incomplete message above); shape mismatch -> `parse`; else `network`/`other`. Default `refresh_minutes` 15.
 - [ ] **Step 1:** Failing parser tests:
 
 ```ts
@@ -1221,6 +1221,7 @@ Everything above was verified against primary sources on 2026-07-13 by parallel 
 - Working implementations: seosd97/cc-token-exposer (`internal/usage/client.go`), EcoCJ/Tally (`src-tauri/src/claude/api.rs`), majiayu000/quotabar, Iamshankhadeep/ccseva, steipete/CodexBar
 - Credential file location (official): code.claude.com/docs/en/authentication - Windows `%USERPROFILE%\.claude\.credentials.json`; macOS uses Keychain service `Claude Code-credentials`
 - User-Agent requirement / 429 behavior: anthropics/claude-code issues #31021, #31637
+- **Tauri HTTP transport (verified 2026-07-13 live debug):** enable `tauri-plugin-http` feature `unsafe-headers`. Without it the plugin strips Cookie/Origin/Referer/Sec-* and force-appends the webview Origin; Anthropic treats Origin-bearing calls as browser CORS and rejects them (401). SubPulse sends `Origin: ""` so the plugin removes Origin entirely. Live `limits[]` kinds: `session` / `weekly_all` / `weekly_scoped` (map to stable `five_hour` / `seven_day` / `seven_day_<model>`).
 - No consumer API confirmation: platform.claude.com/docs/en/api/usage-cost-api ("unavailable for individual accounts", API orgs only)
 - Official-ish alternative surface: code.claude.com/docs/en/statusline (`rate_limits.five_hour/seven_day.used_percentage`)
 - Weekly reset is per-account fixed day/time; never hardcode a weekday: support.claude.com article 11647753
@@ -1229,6 +1230,7 @@ Everything above was verified against primary sources on 2026-07-13 by parallel 
 - usage-summary schema + cookie handling: github.com/steipete/CodexBar `docs/cursor.md` (actively maintained)
 - Raycast Cursor Costs (raycast/extensions `extensions/cursor-costs`): usage-summary + get-aggregated-usage-events
 - Browser-mimic header requirement + legacy endpoints: github.com/Dwtexe/cursor-stats (ARCHIVED 2026-03 - reference only)
+- **Same `unsafe-headers` requirement:** Cookie/Origin/Referer/Sec-* must reach the wire or Cursor 403s / returns empty bodies that surface as opaque JSON EOF. Validate cookie shape before fetch; map "Unexpected end of input" to a human incomplete-cookie auth message.
 - No individual API (Business+ only): cursor.com/docs/api, forum.cursor.com thread 122406
 - Pricing/pool model: cursor.com/docs/account/pricing, cursor.com/blog/june-2025-pricing
 
@@ -1247,7 +1249,7 @@ Everything above was verified against primary sources on 2026-07-13 by parallel 
 - Grok/SuperGrok: nothing official; third-party estimates conflict by up to 10x - treat as logger, not gauge
 - Copilot: github.blog usage-based-billing announcement + docs.github.com billing docs (high confidence, official)
 
-**Tauri stack (verified on npm/crates 2026-07-13):** Tauri 2.11.x stable; all named plugins exist; keyring 4.x defaults cover Windows Credential Manager; stronghold headed for deprecation; tray `showMenuOnLeftClick` rename since 2.2; NSIS `installMode: "currentUser"` is the default. Reference Tauri apps with the same window shape: github.com/ayangweb/BongoCat (always-on-top transparent widget + tray), github.com/EcoPasteHub/EcoPaste (React 19 + SQLite + tray + floating panel).
+**Tauri stack (verified on npm/crates 2026-07-13):** Tauri 2.11.x stable; all named plugins exist; keyring 4.x defaults cover Windows Credential Manager; stronghold headed for deprecation; tray `showMenuOnLeftClick` rename since 2.2; NSIS `installMode: "currentUser"` is the default. **`tauri-plugin-http` must use `features = ["unsafe-headers"]` for Claude + Cursor unofficial connectors** (see Task 4.2/4.3). Reference Tauri apps with the same window shape: github.com/ayangweb/BongoCat (always-on-top transparent widget + tray), github.com/EcoPasteHub/EcoPaste (React 19 + SQLite + tray + floating panel).
 
 ## 17. Future (explicitly out of v1)
 
