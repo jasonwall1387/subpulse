@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { appDataDir, join } from "@tauri-apps/api/path";
+import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { BaseDirectory, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -22,6 +23,14 @@ export function SettingsView() {
   const { data: plans = [], refetch: refetchPlans } = useQuery({
     queryKey: ["usage-plans"],
     queryFn: () => listPlans(),
+  });
+  const { data: launchAtLogin = false } = useQuery({
+    queryKey: ["autostart"],
+    queryFn: () => isAutostartEnabled().catch(() => false),
+  });
+  const { data: startHidden = false } = useQuery({
+    queryKey: ["setting", "start_hidden"],
+    queryFn: () => getSetting<boolean>("start_hidden", false),
   });
   const { data: widgetVisible = false } = useQuery({
     queryKey: ["setting", "widget_visible"],
@@ -102,6 +111,42 @@ export function SettingsView() {
         <h1 className="text-2xl font-semibold text-zinc-100">Settings</h1>
         <p className="mt-1 text-sm text-zinc-400">App preferences and data.</p>
       </div>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-xl">
+        <h2 className="text-sm font-medium text-zinc-200">General</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Startup behavior. Close button hides to tray - quit from the tray menu.
+        </p>
+        <div className="mt-4 space-y-4">
+          <label className="flex items-center justify-between gap-4">
+            <span className="text-sm text-zinc-300">Launch at login</span>
+            <Switch
+              checked={launchAtLogin}
+              onCheckedChange={(checked) => {
+                void (async () => {
+                  if (checked) await enableAutostart();
+                  else await disableAutostart();
+                  await queryClient.invalidateQueries({ queryKey: ["autostart"] });
+                })();
+              }}
+            />
+          </label>
+          <label className="flex items-center justify-between gap-4">
+            <span className="text-sm text-zinc-300">Start hidden</span>
+            <Switch
+              checked={startHidden}
+              onCheckedChange={(checked) => {
+                void (async () => {
+                  await setSetting("start_hidden", checked);
+                  await queryClient.invalidateQueries({
+                    queryKey: ["setting", "start_hidden"],
+                  });
+                })();
+              }}
+            />
+          </label>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-xl">
         <h2 className="text-sm font-medium text-zinc-200">Widget</h2>
