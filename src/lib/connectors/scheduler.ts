@@ -114,8 +114,9 @@ export async function refreshPlan(
     void logError(`refreshPlan ${planId} error (${next}): ${msg}`);
   }
 
-  if (!opts?.manual) {
-    schedulePlan(plan);
+  if (!authStopped.has(planId)) {
+    const latest = (await listPlans()).find((p) => p.id === planId);
+    if (latest) schedulePlan(latest);
   }
 }
 
@@ -128,11 +129,13 @@ function schedulePlan(plan: UsagePlan): void {
 
     clearTimer(plan.id);
     const failCount = failures.get(plan.id) ?? 0;
-    const delay = nextDelayMs(
-      clampPlanRefreshMinutes(plan.refresh_minutes),
-      failCount,
-      Math.random,
-    );
+    const clamped = clampPlanRefreshMinutes(plan.refresh_minutes);
+    const delay = nextDelayMs(clamped, failCount, Math.random);
+    void import("@tauri-apps/plugin-log").then(({ info }) => {
+      void info(
+        `schedulePlan id=${plan.id} failures=${failCount} delayMs=${delay} baseMin=${clamped}`,
+      );
+    });
     const timer = window.setTimeout(() => {
       void (async () => {
         const { listPlans } = await import("@/lib/repo/usage");
@@ -151,15 +154,21 @@ export async function refreshAll(): Promise<void> {
   try {
     const { listPlans } = await import("@/lib/repo/usage");
     const { connectors } = await import("@/lib/connectors/registry");
+    const { info: logInfo } = await import("@tauri-apps/plugin-log");
     const plans = await listPlans();
     const auto = plans.filter(
       (p) => p.enabled && p.connector !== "manual" && connectors[p.connector],
     );
     for (const plan of auto) {
+      const startedAt = new Date().toISOString();
+      void logInfo(
+        `refreshAll sequential start plan=${plan.id} connector=${plan.connector} at=${startedAt}`,
+      );
       authStopped.delete(plan.id);
       await refreshPlan(plan.id, { manual: true });
-      const latest = (await listPlans()).find((p) => p.id === plan.id);
-      if (latest) schedulePlan(latest);
+      void logInfo(
+        `refreshAll sequential done plan=${plan.id} at=${new Date().toISOString()}`,
+      );
     }
   } finally {
     refreshingAll = false;
