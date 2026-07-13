@@ -1,5 +1,6 @@
 import { HeroTotals } from "@/components/dashboard/HeroTotals";
 import { UpcomingList } from "@/components/dashboard/UpcomingList";
+import { UsageTiles } from "@/components/dashboard/UsageTiles";
 
 export function DashboardView() {
   return (
@@ -14,6 +15,7 @@ export function DashboardView() {
         <HeroTotals />
         <UpcomingList />
       </div>
+      <UsageTiles />
     </div>
   );
 }
