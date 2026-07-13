@@ -104,10 +104,10 @@ const limitsEntrySchema = z
         model: z
           .object({ display_name: z.string().optional() })
           .passthrough()
-          .optional(),
+          .nullish(),
       })
       .passthrough()
-      .optional(),
+      .nullish(),
   })
   .passthrough();
 
