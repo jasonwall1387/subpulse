@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { advanceRenewal, type BillingCycle } from "../cycles";
+import { advanceUntilFuture, type BillingCycle } from "../cycles";
 import { run, select } from "../db";
 import { categorySchema, type Category } from "./categories";
 
@@ -185,17 +185,12 @@ export async function advanceOverdueRenewals(
   for (const row of rows) {
     const parsed = subscriptionSchema.parse(row);
     if (!parsed.next_renewal) continue;
-    let next = parsed.next_renewal;
-    let guard = 0;
-    while (next < todayISO && guard < 120) {
-      next = advanceRenewal(
-        next,
-        parsed.billing_cycle,
-        parsed.cycle_days ?? undefined,
-      );
-      guard += 1;
-      if (next === parsed.next_renewal && guard > 1) break;
-    }
+    const next = advanceUntilFuture(
+      parsed.next_renewal,
+      parsed.billing_cycle,
+      todayISO,
+      parsed.cycle_days ?? undefined,
+    );
     if (next !== parsed.next_renewal) {
       await updateSubscription(parsed.id, { next_renewal: next });
       count += 1;
