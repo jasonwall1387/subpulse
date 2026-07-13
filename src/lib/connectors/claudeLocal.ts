@@ -113,7 +113,9 @@ const limitsEntrySchema = z
 
 const usageResponseSchema = z
   .object({
-    limits: z.array(limitsEntrySchema).optional(),
+    // Tolerant by design: entries are validated individually below, and
+    // both fields are observed live as null on some accounts.
+    limits: z.array(z.unknown()).nullish(),
     extra_usage: z
       .object({
         is_enabled: z.boolean().optional(),
@@ -122,7 +124,7 @@ const usageResponseSchema = z
         utilization: z.number().nullable().optional(),
       })
       .passthrough()
-      .optional(),
+      .nullish(),
   })
   .passthrough();
 
@@ -135,24 +137,48 @@ export function parseClaudeUsage(raw: unknown): NormalizedBucket[] {
   const data = parsed.data;
   const out: NormalizedBucket[] = [];
 
-  if (Array.isArray(data.limits) && data.limits.length > 0) {
-    for (const entry of data.limits) {
+  // Validate limits entries individually so one odd entry never kills the
+  // whole fetch. Live kind names observed 2026-07-13: session, weekly_all,
+  // weekly_scoped (with scope.model.display_name); older/fixture names:
+  // five_hour, seven_day. Map all onto stable keys shared with the
+  // top-level shape so bucket upserts stay consistent.
+  const limitEntries = (Array.isArray(data.limits) ? data.limits : [])
+    .map((e) => limitsEntrySchema.safeParse(e))
+    .filter((r): r is { success: true; data: z.infer<typeof limitsEntrySchema> } => r.success)
+    .map((r) => r.data);
+
+  if (limitEntries.length > 0) {
+    for (const entry of limitEntries) {
       const displayName = entry.scope?.model?.display_name;
-      const key =
-        displayName && entry.kind === "seven_day"
-          ? `seven_day_${slugify(displayName)}`
-          : entry.kind === "seven_day" && entry.group === "all_models"
-            ? "seven_day"
-            : entry.kind;
       const percent = entry.percent;
       if (percent === undefined) continue;
-      const label = displayName
-        ? `Weekly - ${displayName}`
-        : humanizeBucketKey(key);
+      let key: string;
+      let label: string;
+      let windowKind: WindowKind;
+      if (entry.kind === "session" || entry.kind === "five_hour") {
+        key = "five_hour";
+        label = "5-hour limit";
+        windowKind = "rolling_5h";
+      } else if (
+        entry.kind === "weekly_all" ||
+        (entry.kind === "seven_day" && !displayName)
+      ) {
+        key = "seven_day";
+        label = "Weekly - all models";
+        windowKind = "weekly";
+      } else if (displayName) {
+        key = `seven_day_${slugify(displayName)}`;
+        label = `Weekly - ${displayName}`;
+        windowKind = "weekly";
+      } else {
+        key = entry.kind;
+        label = humanizeBucketKey(entry.kind);
+        windowKind = windowKindForKey(entry.kind);
+      }
       out.push({
         key,
         label,
-        windowKind: windowKindForKey(entry.kind),
+        windowKind,
         percent,
         resetsAt: entry.resets_at ?? undefined,
         source: "unofficial",
@@ -270,6 +296,11 @@ async function fetchUsageJson(
         Authorization: `Bearer ${accessToken}`,
         "anthropic-beta": "oauth-2025-04-20",
         "User-Agent": ua,
+        // Empty Origin makes tauri-plugin-http REMOVE the header entirely
+        // (requires the unsafe-headers cargo feature). Without this the
+        // plugin force-appends the webview origin, and Anthropic rejects
+        // Origin-bearing requests as browser CORS (401).
+        Origin: "",
       },
     });
   } catch (err) {
@@ -324,9 +355,8 @@ export const claudeLocalConnector: Connector = {
   async fetchUsage(ctx): Promise<FetchResult> {
     const creds = await loadCreds();
     const json = await fetchUsageJson(ctx, creds.accessToken);
-    const buckets = parseClaudeUsage(json);
     return {
-      buckets,
+      buckets: parseClaudeUsage(json),
       tierLabel: tierFromCreds(creds),
       fetchedAt: new Date().toISOString(),
     };

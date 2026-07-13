@@ -70,3 +70,54 @@ test("parseClaudeUsage top-level and limits fixtures", () => {
     "Max (20x)",
   );
 });
+
+test("parseClaudeUsage live shape: top-level + limits[] kinds session/weekly_*", () => {
+  const liveFixture = {
+    five_hour: { utilization: 19, resets_at: "2026-07-13T21:59:00Z" },
+    seven_day: { utilization: 24, resets_at: "2026-07-15T06:59:00Z" },
+    seven_day_fable: { utilization: 21, resets_at: "2026-07-15T06:59:00Z" },
+    iguana_necktie: null,
+    promo_banner: null,
+    something_else: null,
+    limits: [
+      {
+        kind: "session",
+        percent: 42,
+        resets_at: "2026-07-13T22:00:00Z",
+      },
+      {
+        kind: "weekly_all",
+        group: "all_models",
+        percent: 33,
+        resets_at: "2026-07-15T06:59:00Z",
+      },
+      {
+        kind: "weekly_scoped",
+        group: "model",
+        percent: 18,
+        resets_at: "2026-07-15T06:59:00Z",
+        scope: { model: { display_name: "Fable" } },
+      },
+    ],
+    extra_usage: null,
+  };
+  const buckets = parseClaudeUsage(liveFixture);
+  expect(buckets.map((b) => b.key).sort()).toEqual([
+    "five_hour",
+    "seven_day",
+    "seven_day_fable",
+  ]);
+  expect(buckets.find((b) => b.key === "five_hour")).toMatchObject({
+    percent: 42,
+    label: "5-hour limit",
+    windowKind: "rolling_5h",
+  });
+  expect(buckets.find((b) => b.key === "seven_day")).toMatchObject({
+    percent: 33,
+    label: "Weekly - all models",
+  });
+  expect(buckets.find((b) => b.key === "seven_day_fable")).toMatchObject({
+    percent: 18,
+    label: "Weekly - Fable",
+  });
+});

@@ -23,7 +23,11 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
-tauri-plugin-http = "2.5.9"
+# unsafe-headers is REQUIRED: without it the plugin strips Cookie/Origin/
+# Referer/Sec-* headers (breaking the Cursor connector) and force-appends
+# the webview's own Origin header, which makes Anthropic classify requests
+# as browser CORS and reject them (breaking the Claude connector).
+tauri-plugin-http = { version = "2.5.9", features = ["unsafe-headers"] }
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-notification = "2.3.3"
 tauri-plugin-autostart = "2.5.1"
