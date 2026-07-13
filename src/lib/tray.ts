@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { defaultWindowIcon } from "@tauri-apps/api/app";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { Menu } from "@tauri-apps/api/menu";
 import { CheckMenuItem } from "@tauri-apps/api/menu/checkMenuItem";
 import { MenuItem } from "@tauri-apps/api/menu/menuItem";
@@ -15,11 +15,13 @@ import { getSetting, setSetting } from "@/lib/repo/settings";
 import { listSubscriptions } from "@/lib/repo/subscriptions";
 import { listAllBuckets } from "@/lib/repo/usage";
 
+const WIDGET_VIS_EVENT = "widget:visibility";
+
 let tray: TrayIcon | null = null;
 let widgetCheck: CheckMenuItem | null = null;
 let autostartCheck: CheckMenuItem | null = null;
 
-async function showMainWindow(): Promise<void> {
+export async function showMainWindow(): Promise<void> {
   const main = await WebviewWindow.getByLabel("main");
   if (!main) return;
   await main.show();
@@ -27,16 +29,18 @@ async function showMainWindow(): Promise<void> {
   await main.setFocus();
 }
 
-async function setWidgetVisible(visible: boolean): Promise<void> {
+export async function setWidgetVisible(visible: boolean): Promise<void> {
   await setSetting("widget_visible", visible);
   const widget = await WebviewWindow.getByLabel("widget");
-  if (!widget) return;
-  if (visible) {
-    await widget.show();
-  } else {
-    await widget.hide();
+  if (widget) {
+    if (visible) {
+      await widget.show();
+    } else {
+      await widget.hide();
+    }
   }
   await widgetCheck?.setChecked(visible);
+  await emit(WIDGET_VIS_EVENT, { visible });
 }
 
 export async function updateTrayTooltip(): Promise<void> {
@@ -159,6 +163,20 @@ export async function initTray(): Promise<void> {
   void onUsageUpdated(() => {
     void updateTrayTooltip();
   });
+  void listen<{ visible: boolean }>(WIDGET_VIS_EVENT, (event) => {
+    void widgetCheck?.setChecked(event.payload.visible);
+  });
+}
+
+export async function applyWidgetVisibilityOnBoot(): Promise<void> {
+  const visible = await getSetting<boolean>("widget_visible", false);
+  const widget = await WebviewWindow.getByLabel("widget");
+  if (!widget) return;
+  if (visible) {
+    await widget.show();
+  } else {
+    await widget.hide();
+  }
 }
 
 export async function setupCloseToTray(): Promise<void> {
@@ -168,5 +186,3 @@ export async function setupCloseToTray(): Promise<void> {
     await win.hide();
   });
 }
-
-export { showMainWindow, setWidgetVisible };

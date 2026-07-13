@@ -3,7 +3,11 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
-import { initTray, setupCloseToTray } from "./lib/tray";
+import {
+  applyWidgetVisibilityOnBoot,
+  initTray,
+  setupCloseToTray,
+} from "./lib/tray";
 import { WidgetView } from "./views/WidgetView";
 import "./styles.css";
 
@@ -22,6 +26,7 @@ const isWidget = current.label === "widget";
 async function bootMain(): Promise<void> {
   await setupCloseToTray();
   await initTray();
+  await applyWidgetVisibilityOnBoot();
 }
 
 if (!isWidget) {
