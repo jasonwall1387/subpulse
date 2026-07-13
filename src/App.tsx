@@ -1,6 +1,13 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+  HashRouter,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+} from "react-router-dom";
+import { Toaster } from "sonner";
 import { FooterBar } from "@/components/shell/FooterBar";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { ClockTickProvider } from "@/lib/clock";
@@ -13,6 +20,28 @@ import { SubscriptionsView } from "@/views/SubscriptionsView";
 import { UsageView } from "@/views/UsageView";
 
 export { useClockTick } from "@/lib/clock";
+
+function GlobalShortcuts() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === ",") {
+        e.preventDefault();
+        navigate("/settings");
+        return;
+      }
+      if (key === "n") {
+        e.preventDefault();
+        navigate("/subscriptions", { state: { openNew: true } });
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+  return null;
+}
 
 export default function App() {
   const queryClient = useQueryClient();
@@ -46,6 +75,14 @@ export default function App() {
   return (
     <ClockTickProvider>
       <HashRouter>
+        <GlobalShortcuts />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            className: "border border-white/10 bg-zinc-900 text-zinc-100",
+          }}
+        />
         <div className="flex h-full bg-[var(--bg)] text-zinc-100">
           <Sidebar />
           <div className="flex min-w-0 flex-1 flex-col">

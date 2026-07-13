@@ -4,6 +4,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { BucketRow } from "@/components/usage/BucketRow";
 import { ManualUpdatePopover } from "@/components/usage/ManualUpdatePopover";
 import { refreshPlan } from "@/lib/connectors/scheduler";
+import { toastError } from "@/lib/toast";
 import { emitUsageUpdated } from "@/lib/events";
 import { relativeAgo } from "@/lib/resets";
 import { advanceBucketOnReset } from "@/lib/resets";
@@ -181,6 +182,8 @@ export function PlanCard({
                   try {
                     await refreshPlan(plan.id, { manual: true });
                     onChanged?.();
+                  } catch (err) {
+                    toastError(err, "Refresh failed");
                   } finally {
                     setRefreshing(false);
                   }

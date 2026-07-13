@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { SubscriptionCard } from "@/components/subscriptions/SubscriptionCard";
 import { SubscriptionDialog } from "@/components/subscriptions/SubscriptionDialog";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCategories, useSubscriptions } from "@/lib/hooks";
@@ -18,6 +20,8 @@ const chips: Array<{ id: FilterChip; label: string }> = [
 ];
 
 export function SubscriptionsView() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterChip>("active");
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -49,7 +53,8 @@ export function SubscriptionsView() {
   const grouped = useMemo(() => {
     const map = new Map<string, Subscription[]>();
     for (const sub of filtered) {
-      const cat = sub.category_id != null ? catById.get(sub.category_id) : undefined;
+      const cat =
+        sub.category_id != null ? catById.get(sub.category_id) : undefined;
       const key = cat?.name ?? "Uncategorized";
       const list = map.get(key) ?? [];
       list.push(sub);
@@ -57,6 +62,15 @@ export function SubscriptionsView() {
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [filtered, catById]);
+
+  useEffect(() => {
+    const state = location.state as { openNew?: boolean } | null;
+    if (state?.openNew) {
+      setEditing(null);
+      setDialogOpen(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -150,7 +164,15 @@ export function SubscriptionsView() {
           );
         })}
         {grouped.length === 0 && (
-          <p className="text-sm text-zinc-500">No subscriptions yet.</p>
+          <EmptyState
+            title="No subscriptions yet"
+            description="Add your first subscription to track renewals and spend."
+            actionLabel="Add subscription"
+            onAction={() => {
+              setEditing(null);
+              setDialogOpen(true);
+            }}
+          />
         )}
       </div>
 

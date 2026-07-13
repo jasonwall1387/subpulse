@@ -12,6 +12,7 @@ import { relativeAgo } from "@/lib/resets";
 import type { UsagePlan } from "@/lib/repo/usage";
 import { updatePlan } from "@/lib/repo/usage";
 import { deleteSecret, getSecret, setSecret } from "@/lib/secrets";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 function parseConfig(raw: string): Record<string, unknown> {
@@ -135,6 +136,8 @@ export function ConnectorSettings({
         fetch: tauriFetch as typeof fetch,
       });
       setProbeMsg(result.message);
+      if (result.ok) toastSuccess(result.message);
+      else toastError(result.message);
       try {
         sendNotification({
           title: "SubPulse",
@@ -145,7 +148,9 @@ export function ConnectorSettings({
       }
       onChanged?.();
     } catch (err) {
-      setProbeMsg(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      setProbeMsg(msg);
+      toastError(err);
     } finally {
       setBusy(false);
     }

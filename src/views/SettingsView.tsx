@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { save } from "@tauri-apps/plugin-dialog";
 import { BaseDirectory, remove, writeTextFile } from "@tauri-apps/plugin-fs";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +15,7 @@ import { listCategories } from "@/lib/repo/categories";
 import { getSetting, setSetting } from "@/lib/repo/settings";
 import { listSubscriptions } from "@/lib/repo/subscriptions";
 import { listPlans, updatePlan } from "@/lib/repo/usage";
+import { toastError, toastSuccess } from "@/lib/toast";
 import { setWidgetVisible } from "@/lib/tray";
 import { ConnectorSettings } from "@/components/usage/ConnectorSettings";
 import { loadSeed } from "@/seed/seed";
@@ -72,53 +74,74 @@ export function SettingsView() {
   });
   const [message, setMessage] = useState<string | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
+  const [version, setVersion] = useState<string>("…");
+  const [dataDir, setDataDir] = useState<string>("");
   const seedDone = subs.length > 0 && plans.length > 0;
 
+  useEffect(() => {
+    void getVersion().then(setVersion).catch(() => setVersion("unknown"));
+    void appDataDir().then(setDataDir).catch(() => setDataDir(""));
+  }, []);
+
   async function onLoadSeed() {
-    await loadSeed();
-    await emitSubsUpdated();
-    await emitUsageUpdated();
-    await refetch();
-    await refetchPlans();
-    setMessage("Seed data loaded.");
+    try {
+      await loadSeed();
+      await emitSubsUpdated();
+      await emitUsageUpdated();
+      await refetch();
+      await refetchPlans();
+      toastSuccess("Seed data loaded");
+      setMessage("Seed data loaded.");
+    } catch (err) {
+      toastError(err, "Failed to load seed data");
+    }
   }
 
   async function onExportCsv() {
-    const [allSubs, categories] = await Promise.all([
-      listSubscriptions("all"),
-      listCategories(),
-    ]);
-    const catById = new Map(categories.map((c) => [c.id, c.name]));
-    const header =
-      "name,category,price_usd,cycle,next_renewal,status,payment_method,url,notes";
-    const lines = allSubs.map((s) => {
-      const cells = [
-        s.name,
-        s.category_id != null ? (catById.get(s.category_id) ?? "") : "",
-        (s.price_cents / 100).toFixed(2),
-        s.billing_cycle,
-        s.next_renewal ?? "",
-        s.status,
-        s.payment_method ?? "",
-        s.url ?? "",
-        s.notes ?? "",
-      ];
-      return cells.map(csvEscape).join(",");
-    });
-    const csv = [header, ...lines].join("\n");
-    const path = await save({
-      defaultPath: "subpulse-subscriptions.csv",
-      filters: [{ name: "CSV", extensions: ["csv"] }],
-    });
-    if (!path) return;
-    await writeTextFile(path, csv);
-    setMessage(`Exported ${allSubs.length} rows.`);
+    try {
+      const [allSubs, categories] = await Promise.all([
+        listSubscriptions("all"),
+        listCategories(),
+      ]);
+      const catById = new Map(categories.map((c) => [c.id, c.name]));
+      const header =
+        "name,category,price_usd,cycle,next_renewal,status,payment_method,url,notes";
+      const lines = allSubs.map((s) => {
+        const cells = [
+          s.name,
+          s.category_id != null ? (catById.get(s.category_id) ?? "") : "",
+          (s.price_cents / 100).toFixed(2),
+          s.billing_cycle,
+          s.next_renewal ?? "",
+          s.status,
+          s.payment_method ?? "",
+          s.url ?? "",
+          s.notes ?? "",
+        ];
+        return cells.map(csvEscape).join(",");
+      });
+      const csv = [header, ...lines].join("\n");
+      const path = await save({
+        defaultPath: "subpulse-subscriptions.csv",
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, csv);
+      toastSuccess(`Exported ${allSubs.length} rows`);
+      setMessage(`Exported ${allSubs.length} rows.`);
+    } catch (err) {
+      toastError(err, "Export failed");
+    }
   }
 
   async function onOpenDataFolder() {
-    const dir = await appDataDir();
-    const dbPath = await join(dir, "subpulse.db");
-    await revealItemInDir(dbPath);
+    try {
+      const dir = await appDataDir();
+      const dbPath = await join(dir, "subpulse.db");
+      await revealItemInDir(dbPath);
+    } catch (err) {
+      toastError(err, "Could not open data folder");
+    }
   }
 
   async function onResetDatabase() {
@@ -350,6 +373,45 @@ export function SettingsView() {
               })}
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-xl">
+        <h2 className="text-sm font-medium text-zinc-200">About</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Version, local data path, and plan docs.
+        </p>
+        <dl className="mt-4 space-y-3 text-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <dt className="text-zinc-400">Version</dt>
+            <dd className="tabular-nums text-zinc-100">{version}</dd>
+          </div>
+          <div className="space-y-1">
+            <dt className="text-zinc-400">Data folder</dt>
+            <dd className="break-all font-mono text-xs text-zinc-300">
+              {dataDir || "…"}
+            </dd>
+          </div>
+        </dl>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void onOpenDataFolder()}
+          >
+            Open data folder
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void openUrl(
+                "https://github.com/jasonwall1387/subpulse/blob/master/docs/plan.md",
+              ).catch((err) => toastError(err, "Could not open plan doc"));
+            }}
+          >
+            Open plan doc
+          </Button>
         </div>
       </section>
 

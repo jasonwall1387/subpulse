@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { IconBadge } from "@/components/subscriptions/SubscriptionCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useSubscriptions } from "@/lib/hooks";
 import { daysUntil } from "@/lib/cycles";
 import { emitSubsUpdated } from "@/lib/events";
@@ -55,7 +56,12 @@ export function UpcomingList() {
           );
         })}
         {upcoming.length === 0 && (
-          <p className="text-sm text-zinc-500">No upcoming renewals.</p>
+          <EmptyState
+            title="No renewals this month"
+            description="Active subscriptions with a next renewal date will appear here."
+            actionLabel="Add subscription"
+            to="/subscriptions"
+          />
         )}
       </div>
     </div>
