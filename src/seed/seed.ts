@@ -60,8 +60,9 @@ const usagePlanSeeds = [
     provider: "cursor",
     displayName: "Cursor",
     tierLabel: "Pro",
-    connector: "manual",
+    connector: "cursor_cookie",
     subName: "Cursor Pro",
+    refreshMinutes: 15,
     config: {
       usagePageUrl: "https://cursor.com/dashboard",
       sourceNote:

@@ -15,6 +15,7 @@ import { setupLogging } from "./lib/logging";
 import { startScheduler } from "./lib/connectors/scheduler";
 // Register live connectors (side-effect imports)
 import "./lib/connectors/claudeLocal";
+import "./lib/connectors/cursorCookie";
 import { getSetting } from "./lib/repo/settings";
 import { WidgetView } from "./views/WidgetView";
 import "./styles.css";
