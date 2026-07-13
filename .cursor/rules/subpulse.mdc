@@ -1,0 +1,15 @@
+---
+description: SubPulse guardrails - follow the plan task-by-task
+alwaysApply: true
+---
+
+# SubPulse hard rules
+
+- Secrets ONLY in Windows Credential Manager via secret_* commands. Never in SQLite, git, logs, or connector_config.
+- External JSON (HTTP, credential file) always through zod, tolerant of unknown fields.
+- Unofficial connectors (claude_local, cursor_cookie) fail soft: stale badge, never block UI. Min poll 10 min.
+- ~/.claude/.credentials.json is READ ONLY. Never write, never log its contents.
+- Date math only in src/lib (date-fns). Money is integer cents, USD display.
+- Docs style: no em dashes (use " - "), never the word "straightforward".
+
+Implement exactly one plan task at a time from docs/plan.md. After each task: run `pnpm check`, then commit with a conventional message. Never invent endpoints or auth flows not specified in docs/plan.md. If a step fails twice, stop and report rather than improvising.
