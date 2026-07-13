@@ -1,51 +1,63 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { createContext, useContext, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { FooterBar } from "@/components/shell/FooterBar";
+import { Sidebar } from "@/components/shell/Sidebar";
+import { onSubsUpdated } from "@/lib/events";
+import { CalendarView } from "@/views/CalendarView";
+import { DashboardView } from "@/views/DashboardView";
+import { SettingsView } from "@/views/SettingsView";
+import { SubscriptionsView } from "@/views/SubscriptionsView";
+import { UsageView } from "@/views/UsageView";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const ClockTickContext = createContext(0);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+export function useClockTick(): number {
+  return useContext(ClockTickContext);
 }
 
-export default App;
+export default function App() {
+  const [tick, setTick] = useState(0);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void onSubsUpdated(() => {
+      void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [queryClient]);
+
+  return (
+    <ClockTickContext.Provider value={tick}>
+      <HashRouter>
+        <div className="flex h-full bg-[var(--bg)] text-zinc-100">
+          <Sidebar />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <main className="min-h-0 flex-1 overflow-auto p-6">
+              <Routes>
+                <Route path="/" element={<DashboardView />} />
+                <Route path="/subscriptions" element={<SubscriptionsView />} />
+                <Route path="/calendar" element={<CalendarView />} />
+                <Route path="/usage" element={<UsageView />} />
+                <Route path="/settings" element={<SettingsView />} />
+                <Route path="/widget" element={<Navigate to="/" replace />} />
+              </Routes>
+            </main>
+            <FooterBar />
+          </div>
+        </div>
+      </HashRouter>
+    </ClockTickContext.Provider>
+  );
+}
