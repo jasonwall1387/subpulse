@@ -23,6 +23,8 @@ export function clampPlanRefreshMinutes(minutes: number): number {
 const failures = new Map<number, number>();
 const timers = new Map<number, number>();
 const authStopped = new Set<number>();
+/** Per-plan single-flight: skip if a refresh for that plan is already running. */
+const inFlight = new Map<number, Promise<void>>();
 let started = false;
 let refreshingAll = false;
 
@@ -43,6 +45,18 @@ function parseConfig(raw: string): Record<string, unknown> {
 }
 
 export async function refreshPlan(
+  planId: number,
+  opts?: { manual?: boolean },
+): Promise<void> {
+  if (inFlight.has(planId)) return;
+  const work = refreshPlanInner(planId, opts).finally(() => {
+    inFlight.delete(planId);
+  });
+  inFlight.set(planId, work);
+  await work;
+}
+
+async function refreshPlanInner(
   planId: number,
   opts?: { manual?: boolean },
 ): Promise<void> {

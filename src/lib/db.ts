@@ -2,6 +2,24 @@ import Database from "@tauri-apps/plugin-sql";
 
 let dbPromise: Promise<Database> | null = null;
 
+/** Serialize writes so BEGIN/COMMIT from concurrent plan refreshes cannot interleave. */
+let writeChain: Promise<void> = Promise.resolve();
+
+export async function withSqliteWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const prev = writeChain;
+  writeChain = prev.then(() => gate);
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
 export async function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = Database.load("sqlite:subpulse.db").then(async (db) => {

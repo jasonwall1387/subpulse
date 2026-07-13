@@ -231,11 +231,27 @@ export async function applyFetchResult(
   planId: number,
   result: FetchResult,
 ): Promise<void> {
-  try {
-    await run("BEGIN");
+  const { withSqliteWriteLock } = await import("@/lib/db");
+  // tauri-plugin-sql does not keep a real multi-statement transaction across
+  // execute() calls (BEGIN/COMMIT often fails with "no transaction is active").
+  // Serialize the replace-set write sequence instead.
+  await withSqliteWriteLock(async () => {
     for (const bucket of result.buckets) {
       await upsertBucket(planId, bucket, bucket.source);
       await insertSnapshot(planId, bucket);
+    }
+    // Replace-set: drop stale keys from prior fetches / manual leftovers.
+    // Manual plans never call applyFetchResult, so they are unaffected.
+    const keepKeys = result.buckets.map((b) => b.key);
+    if (keepKeys.length === 0) {
+      await run(`DELETE FROM limit_buckets WHERE plan_id = $1`, [planId]);
+    } else {
+      const placeholders = keepKeys.map((_, i) => `$${i + 2}`).join(", ");
+      await run(
+        `DELETE FROM limit_buckets
+         WHERE plan_id = $1 AND key NOT IN (${placeholders})`,
+        [planId, ...keepKeys],
+      );
     }
     await updatePlan(planId, {
       last_fetch_at: result.fetchedAt,
@@ -245,15 +261,7 @@ export async function applyFetchResult(
         ? { tier_label: result.tierLabel }
         : {}),
     });
-    await run("COMMIT");
-  } catch (err) {
-    try {
-      await run("ROLLBACK");
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
+  });
 }
 
 export async function recordPlanError(
