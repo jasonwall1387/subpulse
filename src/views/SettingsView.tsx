@@ -5,22 +5,30 @@ import { BaseDirectory, remove, writeTextFile } from "@tauri-apps/plugin-fs";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { Button } from "@/components/ui/button";
-import { emitSubsUpdated } from "@/lib/events";
+import { emitSubsUpdated, emitUsageUpdated } from "@/lib/events";
 import { useSubscriptions } from "@/lib/hooks";
 import { listCategories } from "@/lib/repo/categories";
 import { listSubscriptions } from "@/lib/repo/subscriptions";
+import { listPlans } from "@/lib/repo/usage";
 import { loadSeed } from "@/seed/seed";
+import { useQuery } from "@tanstack/react-query";
 
 export function SettingsView() {
   const { data: subs = [], refetch } = useSubscriptions("all");
+  const { data: plans = [], refetch: refetchPlans } = useQuery({
+    queryKey: ["usage-plans"],
+    queryFn: () => listPlans(),
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [resetArmed, setResetArmed] = useState(false);
-  const hasSubs = subs.length > 0;
+  const seedDone = subs.length > 0 && plans.length > 0;
 
   async function onLoadSeed() {
     await loadSeed();
     await emitSubsUpdated();
+    await emitUsageUpdated();
     await refetch();
+    await refetchPlans();
     setMessage("Seed data loaded.");
   }
 
@@ -92,7 +100,7 @@ export function SettingsView() {
           <Button
             type="button"
             variant="outline"
-            disabled={hasSubs}
+            disabled={seedDone}
             onClick={() => void onLoadSeed()}
           >
             Load seed data

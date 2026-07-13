@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { FooterBar } from "@/components/shell/FooterBar";
 import { Sidebar } from "@/components/shell/Sidebar";
-import { onSubsUpdated } from "@/lib/events";
+import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { CalendarView } from "@/views/CalendarView";
 import { DashboardView } from "@/views/DashboardView";
 import { SettingsView } from "@/views/SettingsView";
@@ -26,15 +26,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenSubs: (() => void) | undefined;
+    let unlistenUsage: (() => void) | undefined;
     void onSubsUpdated(() => {
       void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
     }).then((fn) => {
-      unlisten = fn;
+      unlistenSubs = fn;
+    });
+    void onUsageUpdated(() => {
+      void queryClient.invalidateQueries({ queryKey: ["usage-plans"] });
+      void queryClient.invalidateQueries({ queryKey: ["usage-buckets"] });
+      void queryClient.invalidateQueries({ queryKey: ["usage-all-buckets"] });
+    }).then((fn) => {
+      unlistenUsage = fn;
     });
     return () => {
-      unlisten?.();
+      unlistenSubs?.();
+      unlistenUsage?.();
     };
   }, [queryClient]);
 
