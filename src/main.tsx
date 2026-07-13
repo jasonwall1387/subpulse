@@ -12,6 +12,7 @@ import {
 import { startRenewalNotificationLoop } from "./lib/notify/renewals";
 import { startUsageAlertListener } from "./lib/notify/usageAlerts";
 import { setupLogging } from "./lib/logging";
+import { startScheduler } from "./lib/connectors/scheduler";
 import { getSetting } from "./lib/repo/settings";
 import { WidgetView } from "./views/WidgetView";
 import "./styles.css";
@@ -33,6 +34,7 @@ async function bootMain(): Promise<void> {
   // Notifications must not depend on tray succeeding.
   startRenewalNotificationLoop();
   startUsageAlertListener();
+  startScheduler();
 
   await setupCloseToTray();
   try {

@@ -15,6 +15,7 @@ import { getSetting, setSetting } from "@/lib/repo/settings";
 import { listSubscriptions } from "@/lib/repo/subscriptions";
 import { listPlans, updatePlan } from "@/lib/repo/usage";
 import { setWidgetVisible } from "@/lib/tray";
+import { ConnectorSettings } from "@/components/usage/ConnectorSettings";
 import { loadSeed } from "@/seed/seed";
 
 function parseAlertsEnabled(plan: {
@@ -220,6 +221,33 @@ export function SettingsView() {
               }}
             />
           </label>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-white/[0.04] p-5 backdrop-blur-xl">
+        <h2 className="text-sm font-medium text-zinc-200">Connections</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Per-plan connectors, secrets (Windows Credential Manager), and refresh
+          intervals.
+        </p>
+        <div className="mt-4 space-y-3">
+          {plans.length === 0 && (
+            <p className="text-sm text-zinc-500">
+              No usage plans yet - load seed data or add plans first.
+            </p>
+          )}
+          {plans.map((plan) => (
+            <ConnectorSettings
+              key={plan.id}
+              plan={plan}
+              onChanged={() => {
+                void refetchPlans();
+                void queryClient.invalidateQueries({
+                  queryKey: ["usage-buckets"],
+                });
+              }}
+            />
+          ))}
         </div>
       </section>
 

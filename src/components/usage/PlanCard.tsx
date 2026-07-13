@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
-import { ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { BucketRow } from "@/components/usage/BucketRow";
 import { ManualUpdatePopover } from "@/components/usage/ManualUpdatePopover";
+import { refreshPlan } from "@/lib/connectors/scheduler";
 import { emitUsageUpdated } from "@/lib/events";
 import { relativeAgo } from "@/lib/resets";
 import { advanceBucketOnReset } from "@/lib/resets";
@@ -58,6 +59,7 @@ export function PlanCard({
     typeof config.usagePageUrl === "string" ? config.usagePageUrl : null;
   const badge = sourceBadge(plan);
   const rollingRef = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (plan.connector !== "manual") return;
@@ -167,6 +169,29 @@ export function PlanCard({
           })()}
         </p>
         <div className="flex gap-2">
+          {plan.connector !== "manual" && (
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-100 disabled:opacity-50"
+              disabled={refreshing}
+              title="Refresh"
+              onClick={() => {
+                void (async () => {
+                  setRefreshing(true);
+                  try {
+                    await refreshPlan(plan.id, { manual: true });
+                    onChanged?.();
+                  } finally {
+                    setRefreshing(false);
+                  }
+                })();
+              }}
+            >
+              <RefreshCw
+                className={cn("size-4", refreshing && "animate-spin")}
+              />
+            </button>
+          )}
           {plan.connector === "manual" &&
             buckets.map((b) => (
               <ManualUpdatePopover
