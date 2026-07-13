@@ -1,4 +1,12 @@
-/** Stub for Task 1.1; real math lands in Task 1.2 (TDD). */
+import {
+  addDays,
+  addMonths,
+  addYears,
+  differenceInCalendarDays,
+  format,
+  parseISO,
+} from "date-fns";
+
 export type BillingCycle =
   | "weekly"
   | "monthly"
@@ -8,21 +16,48 @@ export type BillingCycle =
 
 export function advanceRenewal(
   dateISO: string,
-  _cycle: BillingCycle,
-  _cycleDays?: number,
+  cycle: BillingCycle,
+  cycleDays?: number,
 ): string {
-  return dateISO;
+  const date = parseISO(dateISO);
+  let next: Date;
+  switch (cycle) {
+    case "weekly":
+      next = addDays(date, 7);
+      break;
+    case "monthly":
+      next = addMonths(date, 1);
+      break;
+    case "quarterly":
+      next = addMonths(date, 3);
+      break;
+    case "annual":
+      next = addYears(date, 1);
+      break;
+    case "custom":
+      next = addDays(date, cycleDays && cycleDays > 0 ? cycleDays : 30);
+      break;
+  }
+  return format(next, "yyyy-MM-dd");
 }
 
 export function advanceUntilFuture(
   dateISO: string,
-  _cycle: BillingCycle,
-  _todayISO: string,
-  _cycleDays?: number,
+  cycle: BillingCycle,
+  todayISO: string,
+  cycleDays?: number,
 ): string {
-  return dateISO;
+  let current = dateISO;
+  let guard = 0;
+  while (current < todayISO && guard < 1200) {
+    const next = advanceRenewal(current, cycle, cycleDays);
+    if (next === current) break;
+    current = next;
+    guard += 1;
+  }
+  return current;
 }
 
-export function daysUntil(_dateISO: string, _todayISO: string): number {
-  return 0;
+export function daysUntil(dateISO: string, todayISO: string): number {
+  return differenceInCalendarDays(parseISO(dateISO), parseISO(todayISO));
 }
