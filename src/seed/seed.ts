@@ -37,9 +37,10 @@ const usagePlanSeeds = [
     provider: "claude",
     displayName: "Claude",
     tierLabel: "Max (20x)",
-    connector: "manual",
+    connector: "claude_local",
     subName: "Claude Max",
     config: { usagePageUrl: "https://claude.ai/settings/usage" },
+    refreshMinutes: 15,
     buckets: [
       {
         key: "five_hour",
@@ -217,6 +218,10 @@ export async function loadSeed(): Promise<void> {
       connector: seed.connector,
       connector_config: seed.config,
       subscription_id: subByName.get(seed.subName) ?? null,
+      refresh_minutes:
+        "refreshMinutes" in seed && typeof seed.refreshMinutes === "number"
+          ? seed.refreshMinutes
+          : 15,
       sort_order: sort,
     });
     sort += 1;
