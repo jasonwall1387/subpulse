@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect x="48" y="48" width="928" height="928" rx="220" fill="#7c3aed"/>
+  <polyline fill="none" stroke="#ffffff" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"
+    points="208.5,512.0 368.2,512.0 416.2,496.0 464.1,735.6 496.0,336.3 543.9,559.9 591.9,512.0 655.8,512.0 703.7,575.9 751.6,512.0 815.5,512.0"/>
+</svg>
