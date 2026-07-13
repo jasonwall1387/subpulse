@@ -152,9 +152,19 @@ export function PlanCard({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] pt-3">
         <p className="text-xs text-zinc-500">
-          {plan.last_fetch_at
-            ? relativeAgo(plan.last_fetch_at, new Date().toISOString())
-            : "never updated"}
+          {(() => {
+            const stamp =
+              plan.connector === "manual"
+                ? buckets.reduce<string | null>((max, b) => {
+                    if (!b.updated_at) return max;
+                    if (!max || b.updated_at > max) return b.updated_at;
+                    return max;
+                  }, null)
+                : plan.last_fetch_at;
+            return stamp
+              ? relativeAgo(stamp, new Date().toISOString())
+              : "never updated";
+          })()}
         </p>
         <div className="flex gap-2">
           {plan.connector === "manual" &&
