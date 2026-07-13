@@ -8,6 +8,7 @@ import {
   WidgetUpcoming,
   WidgetUsageList,
 } from "@/components/usage/WidgetUsageList";
+import { ClockTickProvider } from "@/lib/clock";
 import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { getSetting, setSetting } from "@/lib/repo/settings";
 import { setWidgetVisible, showMainWindow } from "@/lib/tray";
@@ -16,6 +17,14 @@ import { cn } from "@/lib/utils";
 type CtxMenu = { x: number; y: number } | null;
 
 export function WidgetView() {
+  return (
+    <ClockTickProvider>
+      <WidgetViewInner />
+    </ClockTickProvider>
+  );
+}
+
+function WidgetViewInner() {
   const queryClient = useQueryClient();
   const [pinned, setPinned] = useState(true);
   const [ctx, setCtx] = useState<CtxMenu>(null);
@@ -75,10 +84,7 @@ export function WidgetView() {
       }}
       onClick={() => setCtx(null)}
     >
-      <div
-        data-tauri-drag-region
-        className="mb-3 flex items-center gap-2"
-      >
+      <div data-tauri-drag-region className="mb-3 flex items-center gap-2">
         <span
           data-tauri-drag-region
           className="size-2 shrink-0 rounded-full bg-violet-500"

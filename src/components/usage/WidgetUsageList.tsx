@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { barColor } from "@/components/usage/BucketRow";
+import { useClockTick } from "@/lib/clock";
 import { daysUntil } from "@/lib/cycles";
 import { fmtUSD } from "@/lib/money";
 import { formatReset } from "@/lib/resets";
@@ -15,6 +16,7 @@ function chipLabel(days: number): string {
 }
 
 export function WidgetUpcoming() {
+  useClockTick();
   const { data: subs = [] } = useQuery({
     queryKey: ["subscriptions", "active"],
     queryFn: () => listSubscriptions("active"),
@@ -54,6 +56,7 @@ export function WidgetUpcoming() {
 }
 
 export function WidgetUsageList() {
+  useClockTick();
   const { data: buckets = [] } = useQuery({
     queryKey: ["usage-all-buckets"],
     queryFn: () => listAllBuckets(),

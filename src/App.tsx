@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { FooterBar } from "@/components/shell/FooterBar";
 import { Sidebar } from "@/components/shell/Sidebar";
+import { ClockTickProvider } from "@/lib/clock";
 import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { CalendarView } from "@/views/CalendarView";
 import { DashboardView } from "@/views/DashboardView";
@@ -10,20 +11,10 @@ import { SettingsView } from "@/views/SettingsView";
 import { SubscriptionsView } from "@/views/SubscriptionsView";
 import { UsageView } from "@/views/UsageView";
 
-const ClockTickContext = createContext(0);
-
-export function useClockTick(): number {
-  return useContext(ClockTickContext);
-}
+export { useClockTick } from "@/lib/clock";
 
 export default function App() {
-  const [tick, setTick] = useState(0);
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
 
   useEffect(() => {
     let unlistenSubs: (() => void) | undefined;
@@ -48,7 +39,7 @@ export default function App() {
   }, [queryClient]);
 
   return (
-    <ClockTickContext.Provider value={tick}>
+    <ClockTickProvider>
       <HashRouter>
         <div className="flex h-full bg-[var(--bg)] text-zinc-100">
           <Sidebar />
@@ -67,6 +58,6 @@ export default function App() {
           </div>
         </div>
       </HashRouter>
-    </ClockTickContext.Provider>
+    </ClockTickProvider>
   );
 }

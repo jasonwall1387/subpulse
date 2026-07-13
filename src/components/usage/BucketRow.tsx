@@ -1,4 +1,4 @@
-import { useClockTick } from "@/App";
+import { useClockTick } from "@/lib/clock";
 import { formatReset } from "@/lib/resets";
 import { cn } from "@/lib/utils";
 
