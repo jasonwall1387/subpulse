@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "subpulse",
+  "productName": "SubPulse",
   "version": "0.1.0",
   "identifier": "com.jasonwall.subpulse",
   "build": {
@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "subpulse",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "SubPulse",
+        "width": 1160,
+        "height": 760,
+        "minWidth": 980,
+        "minHeight": 640,
+        "center": true
       }
     ],
     "security": {
