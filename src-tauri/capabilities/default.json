@@ -1,10 +1,49 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": ["main", "widget"],
   "permissions": [
     "core:default",
-    "opener:default"
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-start-dragging",
+    "core:event:default",
+    "core:tray:default",
+    "core:menu:default",
+    "core:image:default",
+    "sql:default",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-load",
+    "notification:default",
+    "autostart:default",
+    "window-state:default",
+    "log:default",
+    "dialog:default",
+    "process:allow-exit",
+    "process:allow-restart",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/.claude/.credentials.json" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$HOME/.claude/.credentials.json" }]
+    },
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.anthropic.com/api/oauth/usage" },
+        { "url": "https://cursor.com/**" },
+        { "url": "https://api.openai.com/v1/organization/**" },
+        { "url": "https://api.github.com/users/**" },
+        { "url": "https://management-api.x.ai/**" }
+      ]
+    }
   ]
 }
