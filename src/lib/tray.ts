@@ -1,14 +1,17 @@
 import { format, parseISO } from "date-fns";
 import { defaultWindowIcon } from "@tauri-apps/api/app";
 import { emit, listen } from "@tauri-apps/api/event";
+import { Image } from "@tauri-apps/api/image";
 import { Menu } from "@tauri-apps/api/menu";
 import { CheckMenuItem } from "@tauri-apps/api/menu/checkMenuItem";
 import { MenuItem } from "@tauri-apps/api/menu/menuItem";
 import { PredefinedMenuItem } from "@tauri-apps/api/menu/predefinedMenuItem";
+import { join, resourceDir, resolveResource } from "@tauri-apps/api/path";
 import { TrayIcon, type TrayIconEvent } from "@tauri-apps/api/tray";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { error as logError } from "@tauri-apps/plugin-log";
 import { exit } from "@tauri-apps/plugin-process";
 import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { getSetting, setSetting } from "@/lib/repo/settings";
@@ -77,6 +80,53 @@ export async function updateTrayTooltip(): Promise<void> {
   await tray.setTooltip(tooltip);
 }
 
+async function tryIconFromPath(path: string): Promise<Image | null> {
+  try {
+    return await Image.fromPath(path);
+  } catch (err) {
+    void logError(`tray icon fromPath failed (${path}): ${String(err)}`);
+    return null;
+  }
+}
+
+/** Prefer default window icon; fall back to bundled PNG/ICO on disk. */
+async function loadTrayIcon(): Promise<Image | string | undefined> {
+  try {
+    const def = await defaultWindowIcon();
+    if (def) return def;
+  } catch (err) {
+    void logError(`defaultWindowIcon failed: ${String(err)}`);
+  }
+
+  const candidates: string[] = [];
+  try {
+    candidates.push(await resolveResource("icons/32x32.png"));
+  } catch {
+    // not in resources yet
+  }
+  try {
+    candidates.push(await resolveResource("icons/icon.ico"));
+  } catch {
+    // ignore
+  }
+  try {
+    const base = await resourceDir();
+    candidates.push(await join(base, "icons", "32x32.png"));
+    candidates.push(await join(base, "icons", "icon.ico"));
+  } catch {
+    // ignore
+  }
+
+  for (const path of candidates) {
+    const img = await tryIconFromPath(path);
+    if (img) return img;
+  }
+
+  // Last resort: path string (TrayIcon accepts path directly)
+  if (candidates[0]) return candidates[0];
+  throw new Error("No tray icon available (defaultWindowIcon null and path fallbacks failed)");
+}
+
 export async function initTray(): Promise<void> {
   if (tray) return;
 
@@ -138,10 +188,10 @@ export async function initTray(): Promise<void> {
     ],
   });
 
-  const icon = await defaultWindowIcon();
+  const icon = await loadTrayIcon();
   tray = await TrayIcon.new({
     id: "subpulse-tray",
-    icon: icon ?? undefined,
+    icon,
     tooltip: "SubPulse",
     menu,
     showMenuOnLeftClick: false,
