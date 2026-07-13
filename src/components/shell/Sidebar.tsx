@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   CalendarDays,
   LayoutDashboard,
+  Pencil,
   Settings,
   Sparkles,
   WalletCards,
 } from "lucide-react";
+import { CategoryManager } from "@/components/subscriptions/CategoryManager";
 import { useCategories, useSubscriptions } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +22,7 @@ const nav = [
 export function Sidebar() {
   const { data: categories = [] } = useCategories();
   const { data: subs = [] } = useSubscriptions("all");
+  const [manageOpen, setManageOpen] = useState(false);
 
   const countByCategory = new Map<number, number>();
   for (const sub of subs) {
@@ -52,8 +56,18 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        <div className="mt-6 mb-2 px-3 text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Categories
+        <div className="mt-6 mb-2 flex items-center justify-between px-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+            Categories
+          </span>
+          <button
+            type="button"
+            className="rounded-md p-1 text-zinc-500 hover:bg-white/[0.07] hover:text-zinc-200"
+            onClick={() => setManageOpen(true)}
+            aria-label="Edit categories"
+          >
+            <Pencil className="size-3.5" />
+          </button>
         </div>
         {categories.map((cat) => (
           <div
@@ -83,6 +97,12 @@ export function Sidebar() {
         <Settings className="size-4" />
         Settings
       </NavLink>
+
+      <CategoryManager
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        categories={categories}
+      />
     </aside>
   );
 }
