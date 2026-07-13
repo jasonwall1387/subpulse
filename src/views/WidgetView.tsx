@@ -9,6 +9,7 @@ import {
   WidgetUsageList,
 } from "@/components/usage/WidgetUsageList";
 import { ClockTickProvider } from "@/lib/clock";
+import { setupFocusRefetch } from "@/lib/focusRefetch";
 import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { getSetting, setSetting } from "@/lib/repo/settings";
 import { setWidgetVisible, showMainWindow } from "@/lib/tray";
@@ -39,6 +40,10 @@ function WidgetViewInner() {
     const root = document.getElementById("root");
     if (root) root.style.background = "transparent";
   }, []);
+
+  useEffect(() => {
+    return setupFocusRefetch(queryClient);
+  }, [queryClient]);
 
   useEffect(() => {
     let unSubs: (() => void) | undefined;

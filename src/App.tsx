@@ -4,6 +4,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { FooterBar } from "@/components/shell/FooterBar";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { ClockTickProvider } from "@/lib/clock";
+import { setupFocusRefetch } from "@/lib/focusRefetch";
 import { onSubsUpdated, onUsageUpdated } from "@/lib/events";
 import { CalendarView } from "@/views/CalendarView";
 import { DashboardView } from "@/views/DashboardView";
@@ -15,6 +16,10 @@ export { useClockTick } from "@/lib/clock";
 
 export default function App() {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    return setupFocusRefetch(queryClient);
+  }, [queryClient]);
 
   useEffect(() => {
     let unlistenSubs: (() => void) | undefined;
