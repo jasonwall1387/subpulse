@@ -1,34 +1,33 @@
 # STATUS
 
-Updated: 2026-07-13 (Phase 4 gate)
+Updated: 2026-07-13 (Phase 4 wrap-up gate)
 
 ## Done
-- Phase 0-3 as before (including Phase 3 punch list)
-- Warm-up: `acf2a92` fix: restore main window on second instance
-- Phase 4 (4.1-4.4):
-  - `a957f30` feat: connector framework and scheduler (tdd)
-  - `aa17663` feat: claude local connector (zero-setup)
-  - `417fd3e` feat: cursor cookie connector
-  - `cae33cb` chore: connector hardening pass
+- Phase 0-3 as before
+- Phase 4 (4.1-4.4) + wrap-up transport/hardening:
+  - `fe315ed` fix: claude oauth transport (unsafe-headers, empty Origin, live limits kinds)
+  - `e1482a3` fix: single-flight refresh and replace-set usage buckets
+  - `95834d0` fix: cursor nullish onDemand parse and human cookie errors
+  - `e09fad6` docs: document unsafe-headers and live Claude/Cursor shapes
+  - `…` fix: accept null scope on Claude limits entries (see tip)
+  - Earlier: warm-up unminimize permission, connector framework, claude_local, cursor_cookie, hardening
 
 ## In progress
 - (none)
 
 ## Blocked
-- Claude live `/usage` matching Claude Code panel: local OAuth token returns HTTP 401 until Claude Code refreshes credentials
-- Cursor live usage-summary: needs one-time WorkosCursorSessionToken paste in Settings > Connections (keyring only)
+- (none)
 
 ## Next
 - Phase 5 (optional official-API connectors) only if Jason has the keys
-- After Claude Code login refresh + Cursor cookie paste: re-check Phase 4 live gate rows
 
-## Phase 4 gate (2026-07-13)
+## Phase 4 gate (2026-07-13 wrap-up re-run)
 
 | Check | Result | Evidence |
 |---|---|---|
-| Claude buckets vs Claude Code `/usage` | PARTIAL (connector + TDD green; live HTTP 401) | Parser fixtures in `src/__tests__/claudeParse.test.ts`; live probe `GET api.anthropic.com/api/oauth/usage` with plan headers → 401; plan `id=1` connector=`claude_local`, `last_status=auth` after fail-soft |
-| Cursor after cookie paste; cookie only in Credential Manager | PARTIAL (code + leak-free) | `cursor_cookie` registered; DB `connector_config` has no JWT/`%3A%3A`/`eyJ` hits (`cookie/jwt hits in DB: NONE`); secrets via `secret_*` keyring only; live fetch pending cookie paste |
-| Auth + network fail soft | PASS | Scheduler: `ConnectorError('auth')` → `last_status=auth` + `authStopped` (no poll); other errors → `error` + failure count for backoff; subscriptions have zero connector imports; DB fixtures `Claude=auth`, `Cursor=error` with `limit_buckets` still present for plan 1 |
-| Stale badge (2x interval) | PASS | Forced `last_fetch_at` ~1h old @ 15m interval → `stale? True` (`age_ms ~3600340`); PlanCard/ConnectorSettings badge logic |
-| Sequential `refreshAll` + ≥10m clamp | PASS | Logs `refreshAll sequential start/done` with ISO timestamps; `clampPlanRefreshMinutes` + UI `min={10}`; vitest clamp + `nextDelayMs(5,…)` → 10m |
-| `pnpm check` | PASS | `Test Files 8 passed` / `Tests 15 passed` |
+| Claude buckets vs Claude Code `/usage` within 1 pt | PASS | Live `limits[]`: session=6, weekly_all=39, weekly_scoped/Fable=45; DB plan 1 `last_status=ok` keys `five_hour=6`, `seven_day=39`, `seven_day_fable=45` (stale manual/session/weekly_* rows removed by replace-set); `refreshPlan 1 ok` @ 22:00:27; tier `Max (20x)` |
+| Cursor matches dashboard; cookie only in Credential Manager | PASS | `auth/me` 200 as <redacted>; usage-summary plan pool ~19% (`autoModelSelectedDisplayMessage` "You've used 18%…"); DB plan 2 `ok` `plan_pool` 19.4 used=20 limit=20 tier `Pro`; `cmdkey` target `p2_cookie.subpulse`; DB config scan cookie/JWT hits NONE |
+| Auth + network fail soft | PASS | Prior 401/429/auth paths set badges; single-flight + write lock; no BEGIN/COMMIT on plugin-sql (documented) |
+| Stale badge / sequential refresh / ≥10m clamp | PASS | Prior hardening + replace-set; `refreshAll` sequential logs; clamp tests |
+| `pnpm check` | PASS | 8 files / 17 tests |
+| Transport notes | PASS | `tauri-plugin-http` `unsafe-headers`; Claude `Origin: ""`; Cursor Cookie/Origin/Referer/Sec-* on wire; docs Task 4.2/4.3 + §16 updated |
