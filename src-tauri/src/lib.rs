@@ -1,6 +1,7 @@
 mod secrets;
 
 use tauri::Manager;
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -8,8 +9,58 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+const MIGRATION_1_SQL: &str = r#"
+CREATE TABLE categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  color TEXT NOT NULL DEFAULT '#8b5cf6',
+  emoji TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  price_cents INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  billing_cycle TEXT NOT NULL DEFAULT 'monthly'
+    CHECK (billing_cycle IN ('weekly','monthly','quarterly','annual','custom')),
+  cycle_days INTEGER,
+  next_renewal TEXT,
+  auto_renews INTEGER NOT NULL DEFAULT 1,
+  payment_method TEXT,
+  url TEXT,
+  notes TEXT,
+  is_trial INTEGER NOT NULL DEFAULT 0,
+  trial_ends TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','canceled')),
+  icon_kind TEXT NOT NULL DEFAULT 'auto' CHECK (icon_kind IN ('auto','simple','emoji')),
+  icon_value TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+
+CREATE TABLE notified_renewals (
+  subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+  renewal_date TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('t3','t1','t0')),
+  notified_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (subscription_id, renewal_date, kind)
+);
+"#;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let migrations = vec![Migration {
+        version: 1,
+        description: "subscriptions_core",
+        sql: MIGRATION_1_SQL,
+        kind: MigrationKind::Up,
+    }];
+
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
@@ -19,7 +70,7 @@ pub fn run() {
         }))
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:subpulse.db", vec![])
+                .add_migrations("sqlite:subpulse.db", migrations)
                 .build(),
         )
         .plugin(tauri_plugin_http::init())
