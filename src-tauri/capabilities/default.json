@@ -28,12 +28,41 @@
       "allow": [{ "url": "https://**" }]
     },
     {
+      "identifier": "opener:allow-reveal-item-in-dir",
+      "allow": [
+        { "path": "$APPDATA/com.jasonwall.subpulse/**" },
+        { "path": "$APPCONFIG/com.jasonwall.subpulse/**" },
+        { "path": "$APPLOCALDATA/com.jasonwall.subpulse/**" }
+      ]
+    },
+    {
       "identifier": "fs:allow-read-text-file",
       "allow": [{ "path": "$HOME/.claude/.credentials.json" }]
     },
     {
       "identifier": "fs:allow-exists",
-      "allow": [{ "path": "$HOME/.claude/.credentials.json" }]
+      "allow": [
+        { "path": "$HOME/.claude/.credentials.json" },
+        { "path": "$APPDATA/com.jasonwall.subpulse/**" },
+        { "path": "$APPCONFIG/com.jasonwall.subpulse/**" },
+        { "path": "$APPLOCALDATA/com.jasonwall.subpulse/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DESKTOP/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        { "path": "$APPDATA/com.jasonwall.subpulse/**" },
+        { "path": "$APPCONFIG/com.jasonwall.subpulse/**" },
+        { "path": "$APPLOCALDATA/com.jasonwall.subpulse/**" }
+      ]
     },
     {
       "identifier": "http:default",
